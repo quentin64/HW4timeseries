@@ -1,0 +1,336 @@
+#clear data
+rm(list=ls())
+
+#some packages we will use
+install.packages("xlxs")
+install.packages("readxl")
+install.packages("sandwich")
+install.packages("fBasics")
+install.packages("quantmod")
+install.packages("lmtest")
+install.packages("nlme")
+install.packages("urca")
+install.packages("forecast")
+install.packages("CADFtest")
+install.packages("tseries")
+install.packages("dynlm")
+install.packages("vars")
+install.packages("car")
+install.packages("EIAdata")
+install.packages("tidyquant")
+install.packages("readtext")
+install.packages("quanteda")
+install.packages("xts")
+install.packages("Ecdat")
+install.packages("structchange")
+
+require(lmtest)
+require(nlme)
+require(quantmod)
+require(urca)
+require(forecast)
+require(fBasics)
+require(CADFtest)
+require(urca)
+require(sandwich)
+require(lmtest)
+require(nlme)
+require(tseries)
+require(dynlm)
+require(vars)
+require(car)
+require(EIAdata)
+require(tidyquant)
+require(readxl)
+require(xlsx)
+require(readtext)
+require(quanteda)
+require(xts)
+require(Ecdat)
+require(strucchange)
+require(getsymbols)
+load("~/Downloads/NGfinal.csv")
+
+CSV<- read.csv("~/Downloads/NGfinal.csv")
+View(CSV)
+
+
+# Adjust time window for the Natural gas demand 
+tsDemand <- ts(CSV$USDemand,frequency = 365, start = 2017)
+plot(tsDemand)
+tail(tsDemand)
+
+# Adjust time window for the Total degree days
+tsDD <- ts(CSV$Total_Gas_DD, frequency = 365, start = 2017)
+plot(tsDD)
+tail(tsDD)
+
+# Adjust time window for the HDD
+tsHDD <- ts(CSV$NG_HDD, frequency = 365, start = 2017)
+plot(tsHDD)
+tail(tsHDD)
+
+# Adjust time window for the CDD
+tsCDD <- ts(CSV$NG_CDD, frequency = 365, start = 2017)
+plot(tsCDD)
+tail(tsCDD)
+
+# Take the series first difference
+dtsDemand <- na.omit(diff(tsDemand))
+dtsDD <- na.omit(diff(tsDD))
+dtsHDD <- na.omit(diff(tsHDD))
+dtsCDD <- na.omit(diff(tsCDD))
+
+# Take the log for the second exercice
+ltsDemand <- na.omit(log(tsDemand))
+ltsDD <- na.omit(log(tsDD+min(tsDD)+1))
+ltsHDD <- na.omit(log(tsHDD+min(tsDD)+1))
+ltsCDD <- na.omit(log(tsCDD+min(tsDD)+1))
+
+# Test the stationarity of the series level
+adf.test(tsDemand)
+adf.test(tsDD)
+adf.test(tsHDD)
+adf.test(tsCDD)
+
+# Test  stationarity for the series first difference
+adf.test(dtsDemand)
+adf.test(dtsDD)
+adf.test(dtsHDD)
+adf.test(dtsCDD)
+
+# Test  stationarity for the series first difference
+adf.test(ltsDemand)
+adf.test(ltsDD)
+adf.test(ltsHDD)
+adf.test(ltsCDD)
+
+# Bind the series levels 
+Bind <-cbind(tsDemand,tsDD,ts_gas,ts_dol)
+View(Bind)
+plot(Bind)
+
+# Bind the differenciated series for use in Q1
+Bdind <-cbind(dtsDD,dtsDemand)
+View(Bdind)
+plot(Bdind)
+,dtsHDD,dtsCDD
+# Bind the log series for use in Q2
+Blind <-cbind(ltsDemand,ltsDD,ltsHDD,ltsCDD)
+View(Blind)
+plot(Blind)
+
+# This is just for fun look at Linear model to see if there is correlation, removed my dollars index and price of natural gas because there was no correlation 
+Linearmodel<-lm(tsDemand~tsDD)
+print(Linearmodel)
+summary(Linearmodel)
+
+Linearmode<-lm(ltsDD~lts_gas)
+print(Linearmode)
+summary(Linearmode)
+
+Linearmod<-lm(lts_dol~lts_gas)
+print(Linearmod)
+summary(Linearmod)
+
+
+# PART 2 
+
+
+
+
+# Question d = regression residuals look stationary and have a slight trend
+ts.plot(residuals(lm(ltsDemand~ltsDD+ltsHDD+ltsCDD,data= Blind)))
+
+# They "look" cointegrated DD and HDD look cointegrated but CDD doesnt look cointegrated 
+MTSplot(Blind)
+
+
+# residuals look stationary and might have a slight trend
+ts.plot(ltsDemand)
+ts.plot(ltsDD)
+ts.plot(ltsHDD)
+ts.plot(ltsCDD)
+
+
+# Johanson test reject the null because test value superior to 5 pct
+xa = ca.jo(Blind,ecdet="trend")
+summary(xa)
+# Reject the null of 1 or fewer cointegrating vectors, 
+# because 154.06 > 25.54, the 5% critical value
+# Reject null of 2 or fewer cointegrating vectors also.
+# because 42.83 > 18.96, the 5% critical value
+# Dont Reject null of 3 or fewer cointegrating vectors also.
+# so probably 3 cointegrating vectors.
+
+
+# without a trend, suggestions 3 cointegrating vectors
+xo = ca.jo(Blind ,ecdet="const")
+summary(xo)
+# Reject the null of 1 or fewer cointegrating vectors, 
+# because 98.56 > 22.56 at the 5% critical value
+# Reject null of 2 or fewer cointegrating vectors also.
+# because 42.49 > 15.67 at the 5% critical value
+# Dont Reject null of 3 or fewer cointegrating vectors also.
+# so probably 3 cointegrating vectors.
+
+
+## Control for lags.
+## First decide lag order If cointegrated, VAR in levels is okay
+
+VARselect(Blind,lag.max=20,type="both")
+
+VARorder(Blind ,maxp=20,output=T)
+
+## Johansen test in diff, go with 3 lags because the first info AIC BIC sugest so therefore change K value below. 
+## Evidence again of at leas 2, not quite 3 cointegrating vectors
+ca.Blind = ca.jo(Blind ,type="trace",ecdet="trend",K=6,spec="transitory")
+summary(ca.Blind)
+
+
+## Here we choose two because we reject at more then two therefore there is at least 2 and more then 1 
+## Report parameters (errocorrection= ect1 and ect2, they give return tinme parameters, 1 unit increase Gaso then ..ECT movement)
+## Beta for ECT1 and ECT2 
+ca.Blind2 = cajorls(ca.Blind,r=2)
+ca.Blind2
+
+
+## cointegrating vector
+ca.Blind2$beta
+## AR coefficients, and return time parameters are ect1 and ect2 in:
+ca.Blind2$rlm
+
+### For cointegrating vectors, we have 
+### log.wti = 0.167*log.prop + 0.80*log.jet + 0.00014*t + ect1
+### log.gas = -0.015*log.prop + 0.589*log.jet + 0.00054*t + ect2
+
+### a positive shock to ect1 means wti is abnormally high relative to jet fuel and propane.
+### a positive shock to ect2 means gasoline is abnormally high relative to jet fuel and propane
+
+### A shock to ect1 (abnormally high wti crude price) implies wti crude will return 10.57% of the 
+### way to equilibrium each period, but gasoline will increase 8.5%, propane 25% and jet fuel 16.5% each period.
+### A 1% shock to ect2 (abnormally high gasoline) implies that wti crude will decrease by 0.04% next period.
+
+
+
+
+## Question G: g.	Plot a forecast of the variables.
+veclBlind = vec2var(ca.Blind,r=2)
+plot(predict(veclBlind,n.ahead=50))
+
+
+
+## Question H:plot the non-orthogonalized vs. orthogonalized impulse response functions 
+
+## impulse response functions using IRF's OIRF's
+plot(irf(veclBlind,n.ahead=12,ortho=F))
+
+plot(irf(veclBlind,n.ahead=12,ortho=T))
+
+# Question 1 
+
+
+# show series and summary statistics
+plot(Bdind,xlab="")
+summary(Bdind)
+
+VARselect(Bdind,lag.max=40,type="none")
+# FPE and AIC select 15 lags, same as below:
+varBdind = VAR(Bdind,lag.max=40,type="none",ic="FPE")
+# type = trend, const, both, none
+# lag.max= or p=
+# can enter exogen= for exogenous variables
+# can enter season=12 for seasonal frequency
+# from VAR() output, can do coef, fevd, fitted, irf, Phi, logLik, plot, 
+# predict, print, Psi, resid, summary, Acoef, Bcoef, BQ, causality,
+# restrict, roots, 
+# diagnostics: arch.test, normality.test, serial.test, stability
+
+# basic results
+summary(varBdind)
+summary(varBdind,equation="dtsDemand")
+plot(varBdind)
+plot(varBdind,name="dtsDemand")
+# 12 roots because n=3 variables, p=4 lags and companion form is n*p X n*p = 12
+roots(varBdind)
+# joint Granger-causality test of oil on gas and oil on wells:
+causality(varBdind, cause="dtsDD")
+# diagnostics:
+normality.test(varBdind)
+# rejects normality test for both skewness and kurtosis!
+arch.test(varBdind,lags.multi=28)
+plot(arch.test(varBdind,lags.multi=28))
+# significant ARCH effects, could explain failure of normality.
+serial.test(varBdind,lags.pt = 28)
+# no residual serial correlation, which is good.
+plot(serial.test(varBdind))
+# stability plots the cumulative sum of the errors of each equation
+# because the errors are positive and negative, they should sum to zero.
+# if the cumulative sum deviates, there is probably a structural break.
+stability(varBdind)
+plot(stability(varBdind))
+# forecasting
+varBdindp = predict(varBdind,n.ahead=48)
+# 95% CI by default
+plot(varBdindp)
+# 90% CI by default, some better visualization tools: 
+fanchart(varBdindp)
+
+
+# impulse resonse functions. options ortho=T, cumulative=T or F
+# can define impulse = "doil", response="dwell"
+plot(irf(varBdind,n.ahead=12,ortho=F))
+plot(irf(varBdind,n.ahead=12,ortho=T))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+plot(irf(varBdind,n.ahead=12,ortho=T,impulse = "doil",response="dwell"))
+plot(irf(vargod,n.ahead=24,ortho=T,impulse = "doil",response="dwell",cumulative = T))
+# from the above, a one-standard deviation shock in the oil price return leads to a cumulative 
+# four unit increase in the changes in the drilling index
+plot(fevd(vargod,n.ahead=24))
+
+
+# Calculate the covariance matrix of VAR(p) residuals:
+Omega = summary(vargod)$covres
+# Factor it into upper/lower triangular. Recall R gives the upper triangular, when we want its transpose:
+P = chol(Omega)
+# check that products of lower triangular P and with its transpose return Omega:
+t(P)%*%P
+
+# could report in ADA' form
+Dhalf = diag(P)
+A = t(P/Dhalf)
+# check that we get Omega back if we factored correctly:
+A%*%diag(Dhalf)%*%diag(Dhalf)%*%t(A)
+# report A:
+A
+
+# transform reduced form into structural
+Avar = matrix(c(1,NA,NA,0,1,NA,0,0,1),nrow=3,ncol=3)
+svargod = SVAR(vargod,estmethod="direct",Amat=Avar,hessian=T)
+# estimation method direct is MLE. hessian=T required for standard errors.
+# coefficients of A matrix
+svargod$A
+Ao = solve(svargod$A)
+# compare
+Ao
+A
+# standard errors of A matrix
+svargod$Ase
+summary(svargod)
+plot(irf(svargod,n.ahead=24,ortho=T))
+
+
